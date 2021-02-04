@@ -77,5 +77,24 @@ mod test_garch {
         assert!((mean - mean_).abs() < 0.05);
         assert!((std - std_).abs() < 0.1);
     }
+
+    #[test]
+    fn forecaster() {
+        init();
+        let mut rng: StdRng = SeedableRng::from_seed([100; 32]);
+        let ts = gen_timeseries(100);
+        let omega = 0.5;
+        let alpha = [0.1, 0.2];
+        let beta = [0.3, 0.4];
+        let mut forecaster = garch::Forecaster::new(
+            &ts,
+            omega,
+            &alpha,
+            &beta,
+        );
+        let (next_sigma, next_eps) = forecaster.next(&mut rng);
+        log::debug!("Next Sigma:{:?}", next_sigma);
+        log::debug!("Next Epsilon:{:?}", next_eps);
+    }
 }
 

@@ -112,25 +112,56 @@ pub fn fit(ts: &[f64], p: usize, q: usize) -> Result<Vec<f64>, GarchError> {
 /// $$ \epsilon_t = \sigma_t z_t $$
 /// Where $z_t$ is the white noise, which we assume to be standard normal
 pub fn forecast<T: Rng>(ts: &[f64], n: usize, omega: f64, alpha: &[f64], beta: &[f64], rng: &mut T) -> Result<Vec<f64>, GarchError> {
-    let mean = util::mean(ts);
-    let mut eps: Vec<f64> = ts.iter().map(|x| x - mean).collect();
-
-    // White noise function
-    let normal = Normal::new(0., 1.).unwrap();
-
-    // Initialize sigma_2 for the history we have
-    let mut sigma_2 = garch_recursion(omega, alpha, beta, &eps);
+    let mut forecaster = Forecaster::new(ts, omega, alpha, beta);
 
     // Forecast
     for _ in 0..n {
-        let next_sigma_2 = predict_next(omega, alpha, beta, &eps, &sigma_2);
-        sigma_2.push(next_sigma_2);
-        let white_noise = normal.sample(rng);
-        let next_eps = next_sigma_2.sqrt() * white_noise;
-        eps.push(next_eps);
+        forecaster.next(rng);
     }
 
     // Remove residuals from original time series
-    eps.drain(0..ts.len());
-    Ok(eps)
+    forecaster.eps.drain(0..ts.len());
+    Ok(forecaster.eps)
+}
+
+
+/// A stateful forecaster, more efficient if you
+/// only need one time step ahead, e.g. for use with an ARIMA model
+pub struct Forecaster {
+    eps: Vec<f64>,
+    sigma_2: Vec<f64>,
+    noise: Normal<f64>,
+    omega: f64,
+    alpha: Vec<f64>,
+    beta: Vec<f64>,
+}
+
+impl Forecaster {
+    pub fn new(ts: &[f64], omega: f64, alpha: &[f64], beta: &[f64]) -> Forecaster {
+        // Under stationarity assumptions, this mean should stay stable
+        let mean = util::mean(ts);
+        let eps: Vec<f64> = ts.iter().map(|x| x - mean).collect();
+
+        // Initialize sigma_2 for the history we have
+        let sigma_2 = garch_recursion(omega, alpha, beta, &eps);
+
+        Forecaster {
+            sigma_2, eps,
+            omega,
+            alpha: alpha.to_owned(),
+            beta: beta.to_owned(),
+            noise: Normal::new(0., 1.).unwrap(),
+        }
+    }
+
+    /// Returns the next predicted sigma and epsilon in the series
+    pub fn next<T: Rng>(&mut self, rng: &mut T) -> (f64, f64) {
+        let next_sigma_2 = predict_next(self.omega, &self.alpha, &self.beta, &self.eps, &self.sigma_2);
+        self.sigma_2.push(next_sigma_2);
+        let white_noise = self.noise.sample(rng);
+        let next_sigma = next_sigma_2.sqrt();
+        let next_eps = next_sigma * white_noise;
+        self.eps.push(next_eps);
+        (next_sigma, next_eps)
+    }
 }
