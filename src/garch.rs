@@ -63,14 +63,11 @@ pub fn neg_loglikelihood(sigma_2: &[f64], eps: &[f64]) -> f64 {
 
 /// Fit the GARCH model using MLE
 pub fn fit(ts: &[f64], p: usize, q: usize) -> Result<Vec<f64>, GarchError> {
-    // Really sensitive to initial values, this seems to work ok
-    let mut coef: Vec<f64> = (0..1+p+q).map(|_| rand::random()).collect();
-    println!("initial guess: {:?}", coef);
-
     // Calculate residuals
     let mean = util::mean(ts);
     let eps: Vec<f64> = ts.iter().map(|x| x - mean).collect();
 
+    // Objective function
     let f = |coef: &Vec<f64>| {
         let omega = coef[0];
         let alpha = &coef[1..p+1];
@@ -79,9 +76,16 @@ pub fn fit(ts: &[f64], p: usize, q: usize) -> Result<Vec<f64>, GarchError> {
         neg_loglikelihood(&sigma_2, &eps)
     };
 
+    // Gradient (using automatic differentiation)
     let g = |coef: &Vec<f64>| {
         coef.forward_diff(&f)
     };
+
+    // Really sensitive to initial values, this seems to work ok
+    let mut coef: Vec<f64> = (0..1+p+q).map(|_| rand::random()).collect();
+    log::debug!("Initial Guess: {:?}", coef);
+    log::debug!("Initial Loss: {:?}", f(&coef));
+
     let n_params = coef.len();
     let mut fmin = Lbfgsb::new(&mut coef, &f, &g);
     for i in 0..n_params {
@@ -90,9 +94,14 @@ pub fn fit(ts: &[f64], p: usize, q: usize) -> Result<Vec<f64>, GarchError> {
 
     // For debugging
     // fmin.set_verbosity(101);
+    fmin.set_verbosity(-1);
+    fmin.max_iteration(100);
 
-    fmin.minimize();
+    let result = fmin.minimize();
 
+    log::debug!("Final Params: {:?}", coef);
+    log::debug!("Loss: {:?}", f(&coef));
+    log::debug!("Opt Result: {:?}", result);
     Ok(coef)
 }
 

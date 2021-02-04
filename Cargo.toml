@@ -7,5 +7,7 @@ edition = "2018"
 [dependencies]
 rand = "0.7.3"
 rand_distr = "0.2.2"
-rustimization = "0.1.1"
 finitediff = "0.1.2"
+rustimization = { git = "https://github.com/frnsys/rustimization" }
+log = "0.4.14"
+env_logger = "0.8.2"

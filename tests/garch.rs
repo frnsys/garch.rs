@@ -3,6 +3,10 @@ mod test_garch {
     use rand::prelude::*;
     use rand_distr::{Normal, Distribution};
 
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     fn gen_timeseries() -> Vec<f64> {
         let normal = Normal::new(0., 1.).unwrap();
         let mut rng: StdRng = SeedableRng::from_seed([100; 32]);
@@ -37,6 +41,7 @@ mod test_garch {
 
     #[test]
     fn fit() {
+        init();
         let p = 2;
         let q = 2;
         let ts = gen_timeseries();
