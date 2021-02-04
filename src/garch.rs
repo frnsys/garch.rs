@@ -2,9 +2,8 @@ use rand::Rng;
 use super::util;
 use super::error::GarchError;
 use rand_distr::{Normal, Distribution};
-use argmin::prelude::*;
-use argmin::solver::linesearch::MoreThuenteLineSearch;
-use argmin::solver::quasinewton::LBFGS;
+use rustimization::lbfgsb_minimizer::Lbfgsb;
+use finitediff::FiniteDiff;
 
 /// Compute $sigma_2$ over a time series of residuals
 pub fn garch_recursion(omega: f64, alpha: &[f64], beta: &[f64], eps: &[f64]) -> Vec<f64> {
@@ -113,28 +112,36 @@ impl ArgminOp for FitGARCH {
 /// Fit the GARCH model using MLE
 pub fn fit(ts: &[f64], p: usize, q: usize) -> Result<Vec<f64>, GarchError> {
     // Really sensitive to initial values, this seems to work ok
-    let coef = (0..1+p+q).map(|_| rand::random()).collect();
+    let mut coef: Vec<f64> = (0..1+p+q).map(|_| rand::random()).collect();
     println!("initial guess: {:?}", coef);
 
     // Calculate residuals
     let mean = util::mean(ts);
     let eps: Vec<f64> = ts.iter().map(|x| x - mean).collect();
 
-    // Set up solver
-    let linesearch = MoreThuenteLineSearch::new().c(1e-4, 0.9).unwrap();
-    let solver = LBFGS::new(linesearch, 7);
-        // .with_tol_grad(1e-8)
-        // .with_tol_cost(1e-8);
-    let cost = FitGARCH {
-        p, eps
+    let f = |coef: &Vec<f64>| {
+        let omega = coef[0];
+        let alpha = &coef[1..p+1];
+        let beta = &coef[p+1..];
+        let sigma_2 = garch_recursion(omega, alpha, beta, &eps);
+        neg_loglikelihood(&sigma_2, &eps)
     };
 
-    let res = Executor::new(cost, solver, coef)
-        .add_observer(ArgminSlogLogger::term(), ObserverMode::Always)
-        .max_iters(100)
-        .run().unwrap();
+    let g = |coef: &Vec<f64>| {
+        coef.forward_diff(&f)
+    };
+    let n_params = coef.len();
+    let mut fmin = Lbfgsb::new(&mut coef, &f, &g);
+    for i in 0..n_params {
+        fmin.set_lower_bound(i, 1e-8);
+    }
 
-    Ok(res.state.param)
+    // For debugging
+    // fmin.set_verbosity(101);
+
+    fmin.minimize();
+
+    Ok(coef)
 }
 
 
