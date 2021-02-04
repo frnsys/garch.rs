@@ -60,54 +60,6 @@ pub fn neg_loglikelihood(sigma_2: &[f64], eps: &[f64]) -> f64 {
     -loglik
 }
 
-fn neg_loglikelihood_grad(omega: f64, alpha: &[f64], beta: &[f64], eps: &[f64]) -> Vec<f64> {
-    let grad = vec![0.; 1 + alpha.len() + beta.len()];
-    let sigma_2 = garch_recursion(omega, alpha, beta, eps);
-    sigma_2.iter().zip(eps).fold(grad, |mut acc, (sig2, ep)| {
-        let r = ep.powf(2.)/sig2.powf(2.);
-        acc[0] += -(1./sig2 + r);
-        for i in 0..alpha.len() {
-            acc[1+i] += -(alpha[i]/sig2 + alpha[i]*r);
-        }
-        for i in 0..beta.len() {
-            acc[1+alpha.len()+i] += -(beta[i]/sig2 + beta[i]*r);
-        }
-        acc
-    })
-}
-
-
-#[derive(Clone, Default)]
-struct FitGARCH {
-    p: usize,
-    eps: Vec<f64>,
-}
-impl ArgminOp for FitGARCH {
-    type Param = Vec<f64>;
-    type Output = f64;
-    type Hessian = ();
-    type Jacobian = ();
-    type Float = f64;
-
-    /// Apply the cost function to a parameter `p`
-    fn apply(&self, coef: &Self::Param) -> Result<Self::Output, Error> {
-        let omega = coef[0];
-        let alpha = &coef[1..self.p+1];
-        let beta = &coef[self.p+1..];
-        let sigma_2 = garch_recursion(omega, alpha, beta, &self.eps);
-        let nll = neg_loglikelihood(&sigma_2, &self.eps);
-        Ok(nll)
-    }
-
-    /// Compute the gradient at parameter `p`.
-    fn gradient(&self, coef: &Self::Param) -> Result<Self::Param, Error> {
-        let omega = coef[0];
-        let alpha = &coef[1..self.p+1];
-        let beta = &coef[self.p+1..];
-        let grad = neg_loglikelihood_grad(omega, alpha, beta, &self.eps);
-        Ok(grad)
-    }
-}
 
 /// Fit the GARCH model using MLE
 pub fn fit(ts: &[f64], p: usize, q: usize) -> Result<Vec<f64>, GarchError> {
