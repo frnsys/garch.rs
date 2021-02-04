@@ -7,12 +7,11 @@ mod test_garch {
         let _ = env_logger::builder().is_test(true).try_init();
     }
 
-    fn gen_timeseries() -> Vec<f64> {
+    fn gen_timeseries(n: usize) -> Vec<f64> {
         let normal = Normal::new(0., 1.).unwrap();
         let mut rng: StdRng = SeedableRng::from_seed([100; 32]);
 
         // GARCH(2,2) process
-        let n = 100;
         let omega = 0.5;
         let alpha = [0.1, 0.2];
         let beta = [0.3, 0.4];
@@ -44,9 +43,39 @@ mod test_garch {
         init();
         let p = 2;
         let q = 2;
-        let ts = gen_timeseries();
-        let coef = garch::garch::fit(&ts, p, q).unwrap();
-        println!("coefficients: {:?}", coef);
+        let ts = gen_timeseries(100);
+        let coef = garch::fit(&ts, p, q).unwrap();
+        log::debug!("Coefficients: {:?}", coef);
+    }
+
+    #[test]
+    fn forecast() {
+        init();
+        let mut rng: StdRng = SeedableRng::from_seed([100; 32]);
+        let ts = gen_timeseries(100);
+        let omega = 0.5;
+        let alpha = [0.1, 0.2];
+        let beta = [0.3, 0.4];
+        let forecast = garch::forecast(
+            &ts,
+            100,
+            omega,
+            &alpha,
+            &beta,
+            &mut rng
+        ).unwrap();
+        assert_eq!(forecast.len(), 100);
+
+        let mean = garch::util::mean(&ts);
+        let std = garch::util::std(&ts);
+        log::debug!("Initial  Mean:{:?} Std:{:?}", mean, std);
+
+        let mean_ = garch::util::mean(&forecast);
+        let std_ = garch::util::std(&forecast);
+        log::debug!("Forecast Mean:{:?} Std:{:?}", mean_, std_);
+
+        assert!((mean - mean_).abs() < 0.05);
+        assert!((std - std_).abs() < 0.1);
     }
 }
 
