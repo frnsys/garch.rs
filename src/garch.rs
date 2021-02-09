@@ -110,13 +110,11 @@ pub fn fit(ts: &[f64], p: usize, q: usize) -> Result<Vec<f64>, GarchError> {
 /// GARCH gives us $\sigma^2_t$,
 /// and with that we can compute $\epsilon_t$:
 /// $$ \epsilon_t = \sigma_t z_t $$
-/// Where $z_t$ is the white noise, which we assume to be standard normal
-pub fn forecast<T: Rng>(ts: &[f64], n: usize, omega: f64, alpha: &[f64], beta: &[f64], rng: &mut T) -> Result<Vec<f64>, GarchError> {
+/// Where $z_t$ is the white noise, which can be standard normal
+/// or sampled historically (i.e. filtered historical simulation)
+pub fn forecast<F: Fn(&mut T) -> f64, T: Rng>(ts: &[f64], n: usize, omega: f64, alpha: &[f64], beta: &[f64], noise: F, rng: &mut T) -> Result<Vec<f64>, GarchError> {
     let mean = util::mean(ts);
     let mut eps: Vec<f64> = ts.iter().map(|x| x - mean).collect();
-
-    // White noise function
-    let normal = Normal::new(0., 1.).unwrap();
 
     // Initialize sigma_2 for the history we have
     let mut sigma_2 = garch_recursion(omega, alpha, beta, &eps);
@@ -125,8 +123,7 @@ pub fn forecast<T: Rng>(ts: &[f64], n: usize, omega: f64, alpha: &[f64], beta: &
     for _ in 0..n {
         let next_sigma_2 = predict_next(omega, alpha, beta, &eps, &sigma_2);
         sigma_2.push(next_sigma_2);
-        let white_noise = normal.sample(rng);
-        let next_eps = next_sigma_2.sqrt() * white_noise;
+        let next_eps = next_sigma_2.sqrt() * noise(rng);
         eps.push(next_eps);
     }
 
