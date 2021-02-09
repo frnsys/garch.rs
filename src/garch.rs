@@ -112,7 +112,7 @@ pub fn fit(ts: &[f64], p: usize, q: usize) -> Result<Vec<f64>, GarchError> {
 /// $$ \epsilon_t = \sigma_t z_t $$
 /// Where $z_t$ is the white noise, which can be standard normal
 /// or sampled historically (i.e. filtered historical simulation)
-pub fn forecast<F: Fn(&mut T) -> f64, T: Rng>(ts: &[f64], n: usize, omega: f64, alpha: &[f64], beta: &[f64], noise: &F, rng: &mut T) -> Result<Vec<f64>, GarchError> {
+pub fn forecast<F: Fn(&mut T) -> f64, T: Rng>(ts: &[f64], n: usize, omega: f64, alpha: &[f64], beta: &[f64], noise: &F, rng: &mut T) -> Result<(Vec<f64>, Vec<f64>), GarchError> {
     let mean = util::mean(ts);
     let mut eps: Vec<f64> = ts.iter().map(|x| x - mean).collect();
 
@@ -129,5 +129,6 @@ pub fn forecast<F: Fn(&mut T) -> f64, T: Rng>(ts: &[f64], n: usize, omega: f64, 
 
     // Remove residuals from original time series
     eps.drain(0..ts.len());
-    Ok(eps)
+    sigma_2.drain(0..ts.len());
+    Ok((eps, sigma_2))
 }
