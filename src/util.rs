@@ -1,7 +1,7 @@
 /// Calculate the mean of a vector
 pub fn mean(x: &[f64]) -> f64 {
     let n = x.len() as f64;
-    x.iter().fold(0., |acc, v| acc + v) / n
+    x.iter().sum::<f64>() / n
 }
 
 /// Calculate the std of a vector
